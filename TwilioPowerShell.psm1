@@ -1,10 +1,25 @@
 ﻿#Requires -modules WebServicesPowerShellProxyBuilder
 
 $APIRoot = "https://api.twilio.com"
+$TwilioCredential = [System.Management.Automation.PSCredential]::Empty
+$GetTwilioCredentialScriptBlock = {
+    Import-Clixml -Path $env:USERPROFILE\TwilioCredential.txt
+}
 
 function New-TwilioCredential {
     Get-Credential -Message "Enter your Twilio account SID as the username and your auth token as the password" | 
     Export-Clixml -Path $env:USERPROFILE\TwilioCredential.txt
+}
+
+function Set-GetTwilioCredentialScriptBlock {
+    param (
+        $ScriptBlock
+    )
+    $Script:GetTwilioCredentialScriptBlock = $ScriptBlock
+}
+
+function Get-TwilioCredential {
+    & $GetTwilioCredentialScriptBlock
 }
 
 function Get-TwilioAccounts {
@@ -49,25 +64,11 @@ Function Invoke-TwilioAPIFunction {
         $Header,
         [Switch]$Debug
     )
-    $Debug = $true
     if ($Debug) {
-
-        add-type @"
-    using System.Net;
-    using System.Security.Cryptography.X509Certificates;
-    public class TrustAllCertsPolicy : ICertificatePolicy {
-        public bool CheckValidationResult(
-            ServicePoint srvPoint, X509Certificate certificate,
-            WebRequest request, int certificateProblem) {
-            return true;
-        }
+        Set-CertificatePolicy -TrustAllCerts
     }
-"@
-        [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
-    }
-
     
-    $Credential = Import-Clixml $env:USERPROFILE\TwilioCredential.txt
+    $Credential = Get-TwilioCredential
 
     $URI = if (-not $SubResource ) {
         $APIRoot +"/2010-04-01/$Resource.json"
@@ -115,3 +116,32 @@ Function Invoke-TwilioAPIFunction {
 #Usage Records
 #Usage Triggers
 #"@ -split "`r`n"
+
+
+function Invoke-TwilioFaxAPIFunction {
+    param (
+        $Method,
+        $Body,
+        [Switch]$Debug
+    )     
+    if ($Debug) {
+        Set-CertificatePolicy -TrustAllCerts
+    }
+
+    $Credential = Get-TwilioCredential
+    $URI = "https://fax.twilio.com/v1/Faxes"
+
+    $Parameters = $PSBoundParameters | ConvertFrom-PSBoundParameters -ExcludeProperty Debug -AsHashTable
+
+    Invoke-RestMethod  -URI $URI -Credential $Credential @Parameters
+}
+
+function Get-TwilioFaxes {
+    Invoke-TwilioFaxAPIFunction -Method get |
+    Select -ExpandProperty Faxes
+}
+
+function Remove-TwilioFaxes {
+    Invoke-TwilioFaxAPIFunction -Method delete |
+    Select -ExpandProperty Faxes
+}
