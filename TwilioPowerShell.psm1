@@ -122,6 +122,8 @@ function Invoke-TwilioFaxAPIFunction {
     param (
         $Method,
         $Body,
+        $FaxSid,
+        $MediaSid,
         [Switch]$Debug
     )     
     if ($Debug) {
@@ -129,9 +131,15 @@ function Invoke-TwilioFaxAPIFunction {
     }
 
     $Credential = Get-TwilioCredential
-    $URI = "https://fax.twilio.com/v1/Faxes"
+    $URI = if ($MediaSid -and $FaxSid){
+        "https://fax.twilio.com/v1/Faxes/$FaxSid/media/$MediaSid"
+    } elseif ($FaxSid) {
+        "https://fax.twilio.com/v1/Faxes/$FaxSid"        
+    } else {
+        "https://fax.twilio.com/v1/Faxes"
+    }
 
-    $Parameters = $PSBoundParameters | ConvertFrom-PSBoundParameters -ExcludeProperty Debug -AsHashTable
+    $Parameters = $PSBoundParameters | ConvertFrom-PSBoundParameters -ExcludeProperty Debug,FaxSid,MediaSid -AsHashTable
 
     Invoke-RestMethod  -URI $URI -Credential $Credential @Parameters
 }
@@ -142,6 +150,10 @@ function Get-TwilioFaxes {
 }
 
 function Remove-TwilioFaxes {
-    Invoke-TwilioFaxAPIFunction -Method delete |
-    Select -ExpandProperty Faxes
+    param (
+        [Parameter(Mandatory,ValueFromPipelineByPropertyName)]$SID
+    )
+    process {
+        Invoke-TwilioFaxAPIFunction -Method delete -FaxSid $SID
+    }
 }
