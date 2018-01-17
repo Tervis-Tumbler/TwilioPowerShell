@@ -122,8 +122,8 @@ function Invoke-TwilioFaxAPIFunction {
     param (
         $Method,
         $Body,
-        $FaxSid,
-        $MediaSid,
+        $Sid,
+        $Media_Sid,
         [Switch]$Debug
     )     
     if ($Debug) {
@@ -131,15 +131,15 @@ function Invoke-TwilioFaxAPIFunction {
     }
 
     $Credential = Get-TwilioCredential
-    $URI = if ($MediaSid -and $FaxSid){
-        "https://fax.twilio.com/v1/Faxes/$FaxSid/media/$MediaSid"
-    } elseif ($FaxSid) {
-        "https://fax.twilio.com/v1/Faxes/$FaxSid"        
+    $URI = if ($Media_Sid -and $Sid){
+        "https://fax.twilio.com/v1/Faxes/$Sid/Media/$Media_Sid"
+    } elseif ($Sid) {
+        "https://fax.twilio.com/v1/Faxes/$Sid"        
     } else {
         "https://fax.twilio.com/v1/Faxes"
     }
 
-    $Parameters = $PSBoundParameters | ConvertFrom-PSBoundParameters -ExcludeProperty Debug,FaxSid,MediaSid -AsHashTable
+    $Parameters = $PSBoundParameters | ConvertFrom-PSBoundParameters -ExcludeProperty Debug,Sid,Media_Sid -AsHashTable
 
     Invoke-RestMethod  -URI $URI -Credential $Credential @Parameters
 }
@@ -154,6 +154,35 @@ function Remove-TwilioFaxes {
         [Parameter(Mandatory,ValueFromPipelineByPropertyName)]$SID
     )
     process {
-        Invoke-TwilioFaxAPIFunction -Method delete -FaxSid $SID
+        Invoke-TwilioFaxAPIFunction -Method delete @PSBoundParameters
+    }
+}
+
+function Get-TwilioFaxMedia {
+    param (
+        [Parameter(Mandatory,ValueFromPipelineByPropertyName)]$SID,
+        [Parameter(Mandatory,ValueFromPipelineByPropertyName)]$Media_sid
+    )
+    process {
+        Invoke-TwilioFaxAPIFunction -Method Get @PSBoundParameters
+    }
+}
+
+function Invoke-TwilioFaxMediaDownload {
+    param (
+        [Parameter(Mandatory,ValueFromPipelineByPropertyName)]$SID,
+        [Parameter(Mandatory,ValueFromPipelineByPropertyName)]$Media_sid,
+        [Parameter(Mandatory,ValueFromPipelineByPropertyName)]$media_url
+    )
+    process {        
+        $FaxMedia = Get-TwilioFaxMedia -SID $SID -Media_sid $Media_sid
+        $Extension = if ($FaxMedia.content_type -eq "image/tiff" ) {
+            "tif"
+        } elseif ($FaxMedia.content_type -eq "application/pdf") {
+            "pdf"
+        } else {
+            throw "Unrecongized content type"
+        }
+        Invoke-WebRequest -Uri $media_url -OutFile "$Media_sid.$Extension"
     }
 }
